@@ -18,7 +18,6 @@ import logging
 import os
 from datetime import date
 from pathlib import Path
-from typing import Any
 
 import snowflake.connector
 from dotenv import load_dotenv
@@ -64,6 +63,8 @@ CREATE TABLE IF NOT EXISTS AUDIO_PIPELINE.RAW.AUDIO_FEATURES (
     loaded_at   TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
     run_date    DATE
 );
+
+CREATE STAGE IF NOT EXISTS AUDIO_PIPELINE.RAW.RAW_JSON_STAGE;
 """
 
 
@@ -107,6 +108,62 @@ def _insert_records(cur, table: str, records: list[dict], run_date: str) -> int:
     return len(records)
 
 
+def _escape_sql_string(value: str) -> str:
+    return value.replace("'", "''")
+
+
+def _put_and_copy_json_array(cur, table: str, filepath: Path, run_date: str) -> int:
+    """
+    Upload local JSON array file to internal stage, then COPY into RAW table.
+    JSON payload is expected as a top-level list of objects.
+    """
+    stage_base = "AUDIO_PIPELINE.RAW.RAW_JSON_STAGE"
+    stage_path = f"{table.lower()}/{run_date}"
+    file_uri = f"file://{filepath.resolve()}"
+    escaped_run_date = _escape_sql_string(run_date)
+    expected_name = f"{filepath.name}.gz"
+
+    # PUT uploads local file and auto-compresses to .gz on stage.
+    cur.execute(
+        f"PUT '{file_uri}' @{stage_base}/{stage_path} AUTO_COMPRESS=TRUE OVERWRITE=TRUE"
+    )
+
+    temp_table = f"AUDIO_PIPELINE.RAW.TMP_{table}_LOAD"
+
+    cur.execute(f"CREATE OR REPLACE TEMP TABLE {temp_table} (payload VARIANT)")
+
+    # COPY INTO must remain a simple stage select.
+    cur.execute(
+        f"""
+        COPY INTO {temp_table} (payload)
+        FROM @{stage_base}/{stage_path}
+        FILE_FORMAT = (TYPE = 'JSON')
+        PATTERN = '.*{expected_name}'
+        ON_ERROR = 'ABORT_STATEMENT'
+        """
+    )
+
+    # Flatten top-level JSON array into one RAW row per object.
+    cur.execute(
+        f"""
+        INSERT INTO AUDIO_PIPELINE.RAW.{table} (raw_data, run_date)
+        SELECT
+            flattened.value::VARIANT,
+            '{escaped_run_date}'::DATE
+        FROM {temp_table} src,
+             LATERAL FLATTEN(input => src.payload) flattened
+        """
+    )
+
+    cur.execute(
+        f"SELECT COUNT(*) FROM AUDIO_PIPELINE.RAW.{table} WHERE run_date = %s",
+        (run_date,),
+    )
+    count = int(cur.fetchone()[0])
+    logger.info("Loaded %d records into RAW.%s via COPY INTO", count, table)
+    return count
+
+
 def load_raw_records(
     tracks: list[dict],
     artists: list[dict],
@@ -135,8 +192,10 @@ def load_raw_records(
             )
             logger.info("Cleared existing %s rows for %s", table, run_date)
 
-        for table, records in payload_by_table.items():
-            summary[table.lower()] = _insert_records(cur, table, records, run_date)
+        # Insert fresh data via stage + COPY INTO
+        for table, filepath in files.items():
+            count = _put_and_copy_json_array(cur, table, filepath, run_date)
+
 
         conn.commit()
         logger.info("Direct Snowflake load complete: %s", summary)
@@ -186,10 +245,9 @@ def load_raw(run_date: str = None) -> dict:
             )
             logger.info("Cleared existing %s rows for %s", table, run_date)
 
-        # Insert fresh data
+        # Insert fresh data via stage + COPY INTO
         for table, filepath in files.items():
-            records = _load_json_file(filepath)
-            count   = _insert_records(cur, table, records, run_date)
+            count = _put_and_copy_json_array(cur, table, filepath, run_date)
             summary[table.lower()] = count
 
         conn.commit()
