@@ -1,0 +1,34 @@
+version: 2
+
+sources:
+  - name: raw
+    database: AUDIO_PIPELINE
+    schema: RAW
+    description: "Raw JSON data landed from Spotify/Deezer API via Python ingestion layer"
+
+    tables:
+      - name: tracks
+        description: "Raw track metadata — one VARIANT row per track per run_date"
+        columns:
+          - name: raw_data
+            description: "Full track JSON as Snowflake VARIANT"
+          - name: run_date
+            description: "Date partition of this load"
+          - name: loaded_at
+            description: "Timestamp when row was inserted"
+
+      - name: artists
+        description: "Raw artist data including genres and follower counts"
+        columns:
+          - name: raw_data
+            description: "Full artist JSON as Snowflake VARIANT"
+          - name: run_date
+            description: "Date partition of this load"
+
+      - name: audio_features
+        description: "Audio analysis features per track (Spotify) or derived proxies (Deezer)"
+        columns:
+          - name: raw_data
+            description: "Full audio features JSON as Snowflake VARIANT"
+          - name: run_date
+            description: "Date partition of this load"

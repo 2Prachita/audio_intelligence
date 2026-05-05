@@ -1,0 +1,30 @@
+# ── Secrets — NEVER commit these ─────────────────────────────────────
+.env
+*.pem
+*.key
+
+# ── Raw data (can be large) ───────────────────────────────────────────
+data/raw/
+data/staging/
+
+# ── dbt generated files ───────────────────────────────────────────────
+dbt_project/target/
+dbt_project/dbt_packages/
+dbt_project/logs/
+
+# ── Python ────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.eggs/
+
+# ── OS ────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── IDEs ──────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.iml

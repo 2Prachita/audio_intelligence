@@ -1,0 +1,148 @@
+version: 2
+
+models:
+
+  # ── STAGING ──────────────────────────────────────────────────────────
+
+  - name: stg_tracks
+    description: "Cleaned track records from RAW.TRACKS"
+    columns:
+      - name: track_id
+        description: "Unique track identifier"
+        tests:
+          - not_null
+          - unique
+      - name: track_name
+        tests:
+          - not_null
+      - name: artist_id
+        tests:
+          - not_null
+      - name: duration_ms
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 1000       # at least 1 second
+              max_value: 7200000    # max 2 hours
+      - name: popularity
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 100
+              inclusive: true
+      - name: source
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['spotify', 'deezer']
+
+  - name: stg_artists
+    description: "Cleaned artist records from RAW.ARTISTS"
+    columns:
+      - name: artist_id
+        tests:
+          - not_null
+          - unique
+      - name: artist_name
+        tests:
+          - not_null
+      - name: popularity_score
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 100
+              inclusive: true
+
+  - name: stg_audio_features
+    description: "Audio features — some fields NULL for Deezer source"
+    columns:
+      - name: track_id
+        tests:
+          - not_null
+          - unique
+      - name: danceability
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0.0
+              max_value: 1.0
+              inclusive: true
+              where: "danceability is not null"   # only test when not NULL
+      - name: energy
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0.0
+              max_value: 1.0
+              inclusive: true
+              where: "energy is not null"
+      - name: valence
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0.0
+              max_value: 1.0
+              inclusive: true
+              where: "valence is not null"
+      - name: effective_tempo_bpm
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 30
+              max_value: 300
+              inclusive: true
+              where: "effective_tempo_bpm is not null"
+
+  # ── MARTS ─────────────────────────────────────────────────────────────
+
+  - name: dim_artists
+    description: "SCD-2 artist dimension — one row per change event"
+    columns:
+      - name: artist_surrogate_key
+        tests:
+          - not_null
+          - unique
+      - name: artist_id
+        tests:
+          - not_null
+      - name: artist_name
+        tests:
+          - not_null
+      - name: is_current
+        tests:
+          - not_null
+          - accepted_values:
+              values: [true, false]
+      - name: valid_from
+        tests:
+          - not_null
+
+  - name: fct_audio_features
+    description: "Core fact table — one row per track per run_date"
+    columns:
+      - name: track_id
+        tests:
+          - not_null
+      - name: artist_id
+        tests:
+          - not_null
+      - name: track_name
+        tests:
+          - not_null
+      - name: run_date
+        tests:
+          - not_null
+      # Referential integrity: every track must have an artist in dim_artists
+      - name: artist_surrogate_key
+        tests:
+          - relationships:
+              to: ref('dim_artists')
+              field: artist_surrogate_key
+
+  - name: mart_audio_trends
+    description: "Pre-aggregated analytics — genre profiles, era trends, top artists"
+    columns:
+      - name: agg_type
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['genre_profile', 'era_trends', 'top_artists', 'tempo_dist']
+      - name: dimension_value
+        tests:
+          - not_null

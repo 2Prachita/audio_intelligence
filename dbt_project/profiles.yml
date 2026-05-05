@@ -1,0 +1,35 @@
+# profiles.yml
+# ─────────────
+# Place this file at: dbt_project/profiles.yml
+# OR at: ~/.dbt/profiles.yml (dbt default location)
+#
+# Fill in your Snowflake credentials.
+# All values can reference env vars using the {{ env_var() }} syntax.
+# That way you never hardcode secrets.
+
+audio_pipeline:
+  target: dev
+  outputs:
+    dev:
+      type:      snowflake
+      account:   "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user:      "{{ env_var('SNOWFLAKE_USER') }}"
+      password:  "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+      role:      "{{ env_var('SNOWFLAKE_ROLE', 'SYSADMIN') }}"
+      database:  AUDIO_PIPELINE
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', 'COMPUTE_WH') }}"
+      schema:    staging
+      threads:   4
+      client_session_keep_alive: false
+
+    prod:
+      type:      snowflake
+      account:   "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user:      "{{ env_var('SNOWFLAKE_USER') }}"
+      password:  "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+      role:      SYSADMIN
+      database:  AUDIO_PIPELINE
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', 'COMPUTE_WH') }}"
+      schema:    staging
+      threads:   8
+      client_session_keep_alive: false
