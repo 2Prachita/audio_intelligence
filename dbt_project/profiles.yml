@@ -18,18 +18,6 @@ audio_pipeline:
       role:      "{{ env_var('SNOWFLAKE_ROLE', 'SYSADMIN') }}"
       database:  AUDIO_PIPELINE
       warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', 'COMPUTE_WH') }}"
-      schema:    staging
+      schema:    raw
       threads:   4
-      client_session_keep_alive: false
-
-    prod:
-      type:      snowflake
-      account:   "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
-      user:      "{{ env_var('SNOWFLAKE_USER') }}"
-      password:  "{{ env_var('SNOWFLAKE_PASSWORD') }}"
-      role:      SYSADMIN
-      database:  AUDIO_PIPELINE
-      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', 'COMPUTE_WH') }}"
-      schema:    staging
-      threads:   8
       client_session_keep_alive: false

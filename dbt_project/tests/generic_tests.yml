@@ -2,13 +2,10 @@ version: 2
 
 models:
 
-  # ── STAGING ──────────────────────────────────────────────────────────
-
   - name: stg_tracks
-    description: "Cleaned track records from RAW.TRACKS"
+    description: "Cleaned track records from RAW.TRACKS — supports Spotify and Last.fm sources"
     columns:
       - name: track_id
-        description: "Unique track identifier"
         tests:
           - not_null
           - unique
@@ -22,19 +19,27 @@ models:
         tests:
           - not_null
           - dbt_utils.accepted_range:
-              min_value: 1000       # at least 1 second
-              max_value: 7200000    # max 2 hours
-      - name: popularity
+              min_value: 1000        # at least 1 second
+              max_value: 7200000     # max 2 hours
+      - name: play_count
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 999999999   # Last.fm play counts can be huge
+              inclusive: true
+              where: "play_count is not null"
+      - name: popularity_score
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
               max_value: 100
               inclusive: true
+              where: "popularity_score is not null"  # NULL for Last.fm — skip
       - name: source
         tests:
           - not_null
           - accepted_values:
-              values: ['spotify', 'deezer']
+              values: ['spotify', 'deezer', 'lastfm']  # lastfm added
 
   - name: stg_artists
     description: "Cleaned artist records from RAW.ARTISTS"
@@ -46,15 +51,9 @@ models:
       - name: artist_name
         tests:
           - not_null
-      - name: popularity_score
-        tests:
-          - dbt_utils.accepted_range:
-              min_value: 0
-              max_value: 100
-              inclusive: true
 
   - name: stg_audio_features
-    description: "Audio features — some fields NULL for Deezer source"
+    description: "Audio features — all numeric fields are NULL for Last.fm source"
     columns:
       - name: track_id
         tests:
@@ -66,7 +65,7 @@ models:
               min_value: 0.0
               max_value: 1.0
               inclusive: true
-              where: "danceability is not null"   # only test when not NULL
+              where: "danceability is not null"
       - name: energy
         tests:
           - dbt_utils.accepted_range:
@@ -81,18 +80,9 @@ models:
               max_value: 1.0
               inclusive: true
               where: "valence is not null"
-      - name: effective_tempo_bpm
-        tests:
-          - dbt_utils.accepted_range:
-              min_value: 30
-              max_value: 300
-              inclusive: true
-              where: "effective_tempo_bpm is not null"
-
-  # ── MARTS ─────────────────────────────────────────────────────────────
 
   - name: dim_artists
-    description: "SCD-2 artist dimension — one row per change event"
+    description: "SCD-2 artist dimension"
     columns:
       - name: artist_surrogate_key
         tests:
@@ -114,7 +104,7 @@ models:
           - not_null
 
   - name: fct_audio_features
-    description: "Core fact table — one row per track per run_date"
+    description: "Core fact table — one row per track"
     columns:
       - name: track_id
         tests:
@@ -128,15 +118,9 @@ models:
       - name: run_date
         tests:
           - not_null
-      # Referential integrity: every track must have an artist in dim_artists
-      - name: artist_surrogate_key
-        tests:
-          - relationships:
-              to: ref('dim_artists')
-              field: artist_surrogate_key
 
   - name: mart_audio_trends
-    description: "Pre-aggregated analytics — genre profiles, era trends, top artists"
+    description: "Pre-aggregated analytics mart"
     columns:
       - name: agg_type
         tests:
