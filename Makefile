@@ -1,65 +1,90 @@
-# Makefile
-# ─────────
-# Shortcuts for every step of the pipeline.
-# Usage:  make <target>
-# Requires: make (pre-installed on Mac/Linux; use Git Bash on Windows)
+# ─────────────────────────────────────────────────────────────────────
+# Audio Intelligence Pipeline · Makefile
+# Source: Last.fm API → Snowflake → dbt → Analytics
+# ─────────────────────────────────────────────────────────────────────
+.PHONY: help install env-check diagnose extract load \
+        dbt-deps dbt-run-staging dbt-run-marts dbt-run dbt-test \
+        dbt-docs dbt-all pipeline clean
 
-.PHONY: help install diagnose extract load dbt-deps dbt-run dbt-test dbt-all pipeline clean
-
-# ── Default: show help ────────────────────────────────────────────────
+# ── Default ──────────────────────────────────────────────────────────
 help:
 	@echo ""
-	@echo "  Audio Intelligence Pipeline — available commands"
-	@echo "  ────────────────────────────────────────────────"
-	@echo "  make install      Install all Python dependencies"
-	@echo "  make diagnose     Test Deezer API connectivity"
-	@echo "  make extract      Run Deezer extraction → raw JSON"
-	@echo "  make load         Load raw JSON → Snowflake RAW tables"
-	@echo "  make dbt-deps     Install dbt packages (run once)"
-	@echo "  make dbt-run      Run all dbt models (staging + marts)"
-	@echo "  make dbt-test     Run dbt data quality tests"
-	@echo "  make dbt-all      dbt-deps + dbt-run + dbt-test"
-	@echo "  make pipeline     Full run: extract + load + dbt-all"
-	@echo "  make clean        Remove generated files"
+	@echo "  🎵 Audio Intelligence Pipeline"
+	@echo "  ─────────────────────────────────────────────────────"
+	@echo "  make install          Install all Python dependencies"
+	@echo "  make env-check        Verify all env vars are set"
+	@echo "  make diagnose         Test Last.fm API connectivity"
+	@echo "  make extract          Pull data from Last.fm → raw JSON"
+	@echo "  make load             Load raw JSON → Snowflake RAW tables"
+	@echo "  make dbt-deps         Install dbt packages (run once)"
+	@echo "  make dbt-run-staging  Run staging views only"
+	@echo "  make dbt-run-marts    Run mart tables only"
+	@echo "  make dbt-run          Run ALL dbt models"
+	@echo "  make dbt-test         Run data quality tests"
+	@echo "  make dbt-docs         Generate + serve dbt docs (localhost:8080)"
+	@echo "  make dbt-all          deps + run + test"
+	@echo "  make pipeline         Full run: extract → load → dbt-all"
+	@echo "  make clean            Remove generated files"
 	@echo ""
 
-# ── Setup ─────────────────────────────────────────────────────────────
+# ── Setup ────────────────────────────────────────────────────────────
 install:
 	pip install -r requirements.txt
 
-# ── Diagnose Deezer connectivity FIRST if getting 0 records ──────────
-diagnose:
-	python -m ingestion.deezer_ingest diagnose
+env-check:
+	@echo "Checking required environment variables..."
+	@test -n "$$SNOWFLAKE_ACCOUNT"   || (echo "❌ SNOWFLAKE_ACCOUNT not set"   && exit 1)
+	@test -n "$$SNOWFLAKE_USER"      || (echo "❌ SNOWFLAKE_USER not set"      && exit 1)
+	@test -n "$$SNOWFLAKE_PASSWORD"  || (echo "❌ SNOWFLAKE_PASSWORD not set"  && exit 1)
+	@test -n "$$SNOWFLAKE_WAREHOUSE" || (echo "❌ SNOWFLAKE_WAREHOUSE not set" && exit 1)
+	@test -n "$$SNOWFLAKE_ROLE"      || (echo "❌ SNOWFLAKE_ROLE not set"      && exit 1)
+	@test -n "$$LASTFM_API_KEY"      || (echo "❌ LASTFM_API_KEY not set"      && exit 1)
+	@echo "All environment variables set"
 
-# ── Extraction ────────────────────────────────────────────────────────
+# ── Diagnose ─────────────────────────────────────────────────────────
+diagnose:
+	@echo "Testing Last.fm API connectivity..."
+	python -c "from ingestion.lastfm_client import LastFMClient; c = LastFMClient(); r = c.diagnose(); print(r)"
+
+# ── Extraction ───────────────────────────────────────────────────────
 extract:
-	python -m ingestion.deezer_ingest
+	@echo "Extracting from Last.fm API..."
+	python -m ingestion.lastfm_ingest
 
 # ── Load to Snowflake ─────────────────────────────────────────────────
 load:
+	@echo "Loading raw JSON → Snowflake RAW tables..."
 	python -m ingestion.snowflake_loader
 
-# ── dbt ───────────────────────────────────────────────────────────────
+# ── dbt ──────────────────────────────────────────────────────────────
+DBT_FLAGS = --profiles-dir . --project-dir dbt_project
+
 dbt-deps:
-	cd dbt_project && dbt deps --profiles-dir .
-
-dbt-run:
-	cd dbt_project && dbt run --profiles-dir .
-
-dbt-test:
-	cd dbt_project && dbt test --profiles-dir .
+	dbt deps $(DBT_FLAGS)
 
 dbt-run-staging:
-	cd dbt_project && dbt run --select staging --profiles-dir .
+	dbt run --select staging $(DBT_FLAGS)
 
 dbt-run-marts:
-	cd dbt_project && dbt run --select marts --profiles-dir .
+	dbt run --select marts $(DBT_FLAGS)
+
+dbt-run:
+	dbt run $(DBT_FLAGS)
+
+dbt-test:
+	dbt test $(DBT_FLAGS)
+
+dbt-docs:
+	dbt docs generate $(DBT_FLAGS)
+	dbt docs serve $(DBT_FLAGS)
+
+dbt-compile:
+	dbt compile $(DBT_FLAGS)
+
+dbt-debug:
+	dbt debug $(DBT_FLAGS)
 
 dbt-all: dbt-deps dbt-run dbt-test
-
-# ── Full pipeline ─────────────────────────────────────────────────────
-pipeline: extract load dbt-all
-	@echo "Full pipeline complete"
 
 # ── Prefect ───────────────────────────────────────────────────────────
 prefect-run:
@@ -68,7 +93,13 @@ prefect-run:
 prefect-deploy:
 	python orchestration/pipeline.py deploy
 
-# ── Cleanup ───────────────────────────────────────────────────────────
+# ── Full pipeline ─────────────────────────────────────────────────────
+pipeline: env-check extract load dbt-all
+	@echo ""
+	@echo "Full pipeline complete — $(shell date)"
+
+# ── Clean ─────────────────────────────────────────────────────────────
 clean:
-	rm -rf data/raw dbt_project/target dbt_project/dbt_packages
-	find . -type d -name __pycache__ -exec rm -rf {} +
+	rm -rf data/raw dbt_project/target dbt_project/dbt_packages dbt_project/logs
+	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+	@echo "Cleaned generated files"

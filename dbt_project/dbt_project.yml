@@ -13,11 +13,13 @@ clean-targets: ["target", "dbt_packages"]
 models:
   audio_pipeline:
     staging:
+      +database:     AUDIO_PIPELINE
       +schema:       staging       # → AUDIO_PIPELINE.STAGING
       +materialized: view          # staging = views (cheap, always fresh)
       +tags:         ["staging"]
 
     marts:
+      +database:     AUDIO_PIPELINE
       +schema:       marts         # → AUDIO_PIPELINE.MARTS
       +materialized: table         # marts = tables (fast for queries)
       +tags:         ["marts"]

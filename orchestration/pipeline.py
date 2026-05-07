@@ -23,7 +23,6 @@ from pathlib import Path
 
 from prefect import flow, task, get_run_logger
 from prefect.tasks import task_input_hash
-from prefect.notifications import SlackWebhook
 from datetime import timedelta
 from dotenv import load_dotenv
 
@@ -218,21 +217,16 @@ def audio_pipeline_flow():
 
 def deploy():
     """
-    Register this flow with Prefect server + set daily schedule.
-    Run once:  python orchestration/pipeline.py deploy
-    Then start worker:  prefect worker start --pool default-agent-pool
+    deploy the flow to the prefect cloud
     """
-    from prefect.deployments import Deployment
-    from prefect.server.schemas.schedules import CronSchedule
+    from prefect import flow
 
-    deployment = Deployment.build_from_flow(
-        flow=audio_pipeline_flow,
-        name="daily-run",
-        schedule=CronSchedule(cron="0 6 * * *", timezone="Asia/Kolkata"),  # 6am IST daily
-        work_queue_name="default",
-        tags=["audio", "spotify", "daily"],
+
+if __name__ == "__main__":
+    audio_pipeline_flow.serve(name="audio-intelligence-pipeline",
+        tags=["onboarding"],
+        cron="0 6 * * *"
     )
-    deployment.apply()
     print("Deployment registered — runs daily at 6am IST")
 
 

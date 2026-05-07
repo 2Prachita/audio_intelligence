@@ -1,111 +1,125 @@
-# Audio Intelligence Pipeline
+# 🎵 Audio Intelligence Pipeline
 
-> End-to-end data engineering pipeline ingesting audio metadata from the Deezer API,
-> orchestrating transformations with Prefect, modelling with dbt, and landing analytics-ready
-> data in Snowflake — all designed to mirror real production patterns at audio-AI companies.
+> End-to-end data engineering portfolio project — ingests global music chart data from the Last.fm API, orchestrates transformations with Prefect, models with dbt, and lands analytics-ready data in Snowflake. Designed to mirror real production patterns at audio-AI companies like ElevenLabs, Deepgram, and Sarvam AI.
+
+[![Python](https://img.shields.io/badge/Python-3.11+-blue)](https://python.org)
+[![dbt](https://img.shields.io/badge/dbt-1.8.7-orange)](https://getdbt.com)
+[![Snowflake](https://img.shields.io/badge/Snowflake-cloud-29B5E8)](https://snowflake.com)
+[![Prefect](https://img.shields.io/badge/Prefect-2.x-blue)](https://prefect.io)
+[![Last.fm](https://img.shields.io/badge/Last.fm-API-D51007)](https://last.fm/api)
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        AUDIO INTELLIGENCE PIPELINE                   │
-│                                                                       │
-│  ┌──────────────┐     ┌──────────────┐     ┌───────────────────────┐ │
-│  │  Deezer API  │────▶│  Python      │────▶│  Snowflake            │ │
-│  │              │     │  Ingestion   │     │  RAW Schema           │ │
-│  │  • Charts    │     │              │     │                       │ │
-│  │  • Genres    │     │  deezer_     │     │  RAW.TRACKS           │ │
-│  │  • Playlists │     │  client.py   │     │  RAW.ARTISTS          │ │
-│  │  • Search    │     │  deezer_     │     │  RAW.AUDIO_FEATURES   │ │
-│  └──────────────┘     │  ingest.py   │     └───────────┬───────────┘ │
-│                        └──────┬───────┘                 │             │
-│                               │                         │             │
-│                        ┌──────▼───────┐     ┌───────────▼───────────┐ │
-│                        │  Local Raw   │     │  dbt Transformations  │ │
-│                        │  JSON Files  │     │                       │ │
-│                        │              │     │  STAGING (views)      │ │
-│                        │  data/raw/   │     │  ├── stg_tracks       │ │
-│                        │  YYYY-MM-DD/ │     │  ├── stg_artists      │ │
-│                        └──────────────┘     │  └── stg_audio_feats  │ │
-│                                             │                       │ │
-│                        ┌──────────────┐     │  MARTS (tables)       │ │
-│                        │  Prefect     │     │  ├── dim_artists(SCD2)│ │
-│                        │  Orchestrat. │     │  ├── fct_audio_feats  │ │
-│                        │              │     │  └── mart_audio_trends│ │
-│                        │  Daily 6am   │     └───────────────────────┘ │
-│                        │  IST schedule│                               │
-│                        └──────────────┘                               │
-└─────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      AUDIO INTELLIGENCE PIPELINE                        │
+│                                                                         │
+│  ┌─────────────┐    ┌──────────────────┐    ┌────────────────────────┐  │
+│  │  Last.fm    │    │  Python          │    │  Snowflake             │  │
+│  │  Public API │───▶│  Ingestion Layer │───▶│  RAW Schema            │  │
+│  │             │    │                  │    │                        │  │
+│  │ • Global    │    │  lastfm_client   │    │  RAW.TRACKS            │  │
+│  │   charts    │    │  lastfm_ingest   │    │  RAW.ARTISTS           │  │
+│  │ • Genre     │    │  snowflake_      │    │  RAW.AUDIO_FEATURES    │  │
+│  │   charts    │    │  loader          │    │  (VARIANT columns)     │  │
+│  │ • Artist    │    │                  │    └───────────┬────────────┘  │
+│  │   top tracks│    │  Fallback chain: │                │               │
+│  └─────────────┘    │  chart→genre→    │    ┌───────────▼────────────┐  │
+│                     │  artist→search   │    │  dbt Transformations   │  │
+│  ┌─────────────┐    └──────┬───────────┘    │                        │  │
+│  │  Local Raw  │           │                │  STAGING (views)       │  │
+│  │  JSON Files │◀──────────┘                │  ├── stg_tracks        │  │
+│  │             │                            │  ├── stg_artists       │  │
+│  │  data/raw/  │                            │  └── stg_audio_features│  │
+│  │  YYYY-MM-DD │                            │                        │  │
+│  └─────────────┘                            │  MARTS (tables)        │  │
+│                                             │  ├── dim_artists (SCD2)│  │
+│  ┌─────────────┐                            │  ├── fct_audio_features│  │
+│  │  Prefect    │                            │  └── mart_audio_trends │  │
+│  │  2.x        │────────────────────────────│                        │  │
+│  │             │                            └────────────────────────┘  │
+│  │  Daily 6am  │                                                        │
+│  │  IST cron   │                                                        │
+│  └─────────────┘                                                        │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## What It Demonstrates
+## What This Project Demonstrates
 
 | Pattern | Implementation |
 |---|---|
-| **API client with retry logic** | Rate limit handling, exponential back-off, full error logging |
-| **Fallback extraction strategy** | Chart → Genre → Playlist → Search (never returns 0 records) |
-| **Medallion architecture** | Raw → Staging → Marts layers in Snowflake |
+| **Production API client** | Rate limiting, exponential back-off, retry logic, full error logging |
+| **Fallback extraction strategy** | Chart → Genre → Artist → Search — never silently returns 0 records |
+| **Geo-blocking problem solving** | Diagnosed Deezer blocking Indian IPs via curl; switched to Last.fm |
+| **Medallion architecture** | Raw → Staging → Marts in Snowflake |
 | **Dimensional modelling** | Star schema with fact + dimension tables |
-| **SCD Type 2** | `dim_artists` tracks artist changes over time with valid_from/valid_to |
-| **dbt transformations** | 6 models across staging + marts with Jinja templating |
-| **Data quality tests** | Not-null, unique, range, referential integrity, accepted values |
+| **SCD Type 2** | `dim_artists` tracks popularity/genre changes with valid_from/valid_to |
+| **Multi-source schema design** | `artist_name_key` join bridge solves Last.fm's name-based vs UUID artist IDs |
+| **dbt transformations** | 6 models, Jinja templating, `generate_schema_name` macro |
+| **Data quality tests** | not_null, unique, accepted_range, referential integrity, accepted_values |
 | **Idempotent loads** | Delete-then-insert by run_date — safe to re-run any day |
-| **Prefect orchestration** | Retry logic, task dependencies, daily schedule, local + cloud modes |
+| **Prefect orchestration** | Task dependencies, retry logic, daily IST schedule |
+| **Custom dbt macro** | `generate_schema_name` overrides default schema prefixing behaviour |
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Extraction | Python 3.13, Requests |
-| Source API | Deezer Public API (no auth required) |
-| Orchestration | Prefect 2.x |
-| Raw storage | Local filesystem (mirrors S3 medallion pattern) |
-| Data warehouse | Snowflake (free trial works) |
-| Transformation | dbt Core + dbt-snowflake |
-| Data quality | dbt tests + dbt_utils |
-| Config | python-dotenv |
+| Layer | Technology | Notes |
+|---|---|---|
+| Language | Python 3.11+ | |
+| Source API | Last.fm Public API | Free, no geo-restrictions, no auth required for reads |
+| Orchestration | Prefect 2.x | Local + cloud deployment support |
+| Raw storage | Local filesystem | Mirrors S3 medallion pattern; swap path for S3 URI |
+| Data warehouse | Snowflake | Free trial works; VARIANT columns for raw JSON |
+| Transformation | dbt-core 1.8.7 + dbt-snowflake | Pinned for Python 3.13 compatibility |
+| Data quality | dbt tests + dbt_utils 1.3.3 | |
+| Package manager | uv | Fast Python package management |
 
 ---
 
 ## Project Structure
 
 ```
-audio_pipeline/
+audio_intelligence/
 ├── ingestion/
-│   ├── deezer_client.py      # API client: retry, rate limit, diagnosis
-│   ├── deezer_ingest.py      # Extraction: chart→genre→playlist→search fallback
-│   └── snowflake_loader.py   # Loads raw JSON → Snowflake VARIANT tables
+│   ├── lastfm_client.py       # API client: auth, retry, rate limit, diagnose()
+│   ├── lastfm_ingest.py       # Extraction: chart→genre→artist fallback chain
+│   ├── snowflake_loader.py    # Idempotent load: raw JSON → Snowflake VARIANT
+│   ├── deezer_client.py       # Original client (superseded — geo-blocked in India)
+│   └── deezer_ingest.py       # Original ingest (superseded)
 ├── orchestration/
-│   └── pipeline.py           # Prefect flow: extract→load→dbt→test
+│   └── pipeline.py            # Prefect flow: extract→load→dbt staging→marts→test
 ├── dbt_project/
+│   ├── macros/
+│   │   └── generate_schema_name.sql   # Override dbt schema prefixing
 │   ├── models/
 │   │   ├── staging/
-│   │   │   ├── sources.yml           # RAW table declarations
-│   │   │   ├── stg_tracks.sql        # Cleaned tracks view
-│   │   │   ├── stg_artists.sql       # Cleaned artists view
-│   │   │   └── stg_audio_features.sql
+│   │   │   ├── sources.yml            # RAW table declarations
+│   │   │   ├── stg_tracks.sql         # Cleans tracks, converts duration s→ms
+│   │   │   ├── stg_artists.sql        # Name-key join bridge for Last.fm IDs
+│   │   │   └── stg_audio_features.sql # Normalises Last.fm field names
 │   │   └── marts/
-│   │       ├── dim_artists.sql       # SCD-2 artist dimension
-│   │       ├── fct_audio_features.sql # Core fact table
+│   │       ├── dim_artists.sql        # SCD-2 with surrogate key hashing
+│   │       ├── fct_audio_features.sql # Core fact table, name-key join
 │   │       └── mart_audio_trends.sql  # Pre-aggregated analytics
 │   ├── tests/
-│   │   └── generic_tests.yml  # Data quality test suite
-│   ├── dbt_project.yml
-│   ├── profiles.yml
-│   └── packages.yml
+│   │   └── generic_tests.yml  # Quality tests for all 6 models
+│   ├── dbt_project.yml        # Model materialisation config
+│   ├── packages.yml           # dbt_utils dependency
+│   └── package-lock.yml       # Locked package versions (commit this)
 ├── utils/
 │   └── logger.py
-├── .env.example
+├── data/                      # Auto-created at runtime (gitignored)
+├── set_env.sh.example         # Env var template (copy → set_env.sh, gitignored)
+├── .env.example               # Python env var template
 ├── .gitignore
 ├── Makefile
-├── requirements.txt
-└── README.md
+└── requirements.txt
 ```
 
 ---
@@ -114,162 +128,138 @@ audio_pipeline/
 
 ### 1. Clone and install
 ```bash
-git clone https://github.com/YOUR_USERNAME/audio-intelligence-pipeline.git
-cd audio-intelligence-pipeline
+git clone https://github.com/2Prachita/audio_intelligence.git
+cd audio_intelligence
 pip install -r requirements.txt
 ```
 
-### 2. Set up credentials
+### 2. Get a free Last.fm API key
+Go to [last.fm/api/account/create](https://www.last.fm/api/account/create) — instant, no credit card.
+
+### 3. Set environment variables
 ```bash
-cp .env.example .env
-# Edit .env and fill in your Snowflake credentials
-# No Spotify or Deezer credentials needed — Deezer is a free public API
+cp set_env.sh.example set_env.sh
+# Edit set_env.sh with your values, then:
+source set_env.sh
 ```
 
-### 3. Verify Deezer connectivity (do this first)
+Required variables:
 ```bash
-make diagnose
-# Expected output:
-#   chart_ok: True
-#   chart_count: 100
-#   sample_track: <some track title>
+export LASTFM_API_KEY=your_key_here
+export SNOWFLAKE_ACCOUNT=orgname-accountname    # NOT the full URL
+export SNOWFLAKE_USER=your_username
+export SNOWFLAKE_PASSWORD=your_password
+export SNOWFLAKE_WAREHOUSE=COMPUTE_WH
+export SNOWFLAKE_ROLE=ACCOUNTADMIN
 ```
 
-### 4. Run the full pipeline
+### 4. Verify connectivity
 ```bash
-# Option A: one command
+make diagnose       # tests Last.fm API
+make env-check      # verifies all env vars are set
+```
+
+### 5. Run the full pipeline
+```bash
+# All in one:
 make pipeline
 
-# Option B: step by step
-make extract        # Pull data from Deezer API → local raw/ JSON
-make load           # Load raw JSON → Snowflake RAW tables
-make dbt-deps       # Install dbt packages (run once)
-make dbt-run        # Run all 6 dbt models
-make dbt-test       # Run data quality tests
+# Or step by step:
+make extract          # Last.fm API → data/raw/YYYY-MM-DD/
+make load             # raw JSON → Snowflake RAW schema
+make dbt-deps         # install dbt_utils (once only)
+make dbt-run          # build all 6 models
+make dbt-test         # run data quality checks
 ```
 
-### 5. Schedule with Prefect (optional)
-```bash
-# Run immediately
-make prefect-run
+### 6. Explore the data (Snowflake worksheet)
+```sql
+-- Top 20 artists by listener count
+SELECT dimension_value AS artist, listener_count, track_count
+FROM AUDIO_PIPELINE.MARTS.MART_AUDIO_TRENDS
+WHERE agg_type = 'top_artists'
+ORDER BY listener_count DESC NULLS LAST
+LIMIT 20;
 
-# Register daily schedule (6am IST)
-make prefect-deploy
-prefect worker start --pool default-agent-pool
+-- Most played tracks
+SELECT track_name, artist_name, play_count, popularity_normalised
+FROM AUDIO_PIPELINE.MARTS.FCT_AUDIO_FEATURES
+ORDER BY play_count DESC NULLS LAST
+LIMIT 20;
+
+-- Genre breakdown
+SELECT dimension_value AS genre, track_count, avg_popularity
+FROM AUDIO_PIPELINE.MARTS.MART_AUDIO_TRENDS
+WHERE agg_type = 'genre_profile'
+ORDER BY track_count DESC;
+```
+
+### 7. Generate dbt docs (optional but impressive)
+```bash
+make dbt-docs
+# Opens at http://localhost:8080 — screenshot the lineage DAG
 ```
 
 ---
 
-## dbt Data Model
+## dbt Data Lineage
 
 ```
 RAW.TRACKS ──────────┐
-RAW.ARTISTS ─────────┤──▶ stg_tracks ──────┐
-RAW.AUDIO_FEATURES ──┘    stg_artists ─────┤──▶ dim_artists (SCD-2)
-                           stg_audio_feats ─┘──▶ fct_audio_features
-                                                 mart_audio_trends
+RAW.ARTISTS ─────────┼──▶ stg_tracks ──────┐
+RAW.AUDIO_FEATURES ──┘    stg_artists ─────┼──▶ dim_artists (SCD-2, incremental)
+                           stg_audio_feats ─┘──▶ fct_audio_features (table)
+                                                  mart_audio_trends (table)
 ```
 
 ### Key design decisions
 
-**`dim_artists` is SCD Type 2** — when an artist's popularity or genre list changes, the old record is closed (`valid_to = today`, `is_current = FALSE`) and a new record is inserted. This supports time-travel queries like:
+**SCD-2 on `dim_artists`** — when an artist's listener count or genre changes, the old record is closed and a new row is inserted. Supports time-travel queries:
 ```sql
--- What was this artist's follower count in March 2024?
-SELECT follower_count
-FROM dim_artists
-WHERE artist_id = 'xyz'
-  AND valid_from <= '2024-03-01'
-  AND (valid_to > '2024-03-01' OR valid_to IS NULL);
+SELECT listener_count FROM AUDIO_PIPELINE.MARTS.DIM_ARTISTS
+WHERE artist_name_key = 'taylor swift'
+  AND valid_from <= '2024-06-01'
+  AND (valid_to > '2024-06-01' OR valid_to IS NULL);
 ```
 
-**Deezer audio features are proxied** — Spotify has a dedicated audio analysis endpoint (tempo, danceability, energy etc). Deezer doesn't. The pipeline stores NULL for these fields from Deezer and derives proxies where possible (BPM, rank). The staging model and fact table handle NULLs gracefully.
+**`artist_name_key` join bridge** — Last.fm's artist table uses name-based IDs (`"lfm:kanye west"`) while track records use MBIDs (UUIDs). A direct join would produce 100% NULLs. Both staging models expose `lower(trim(artist_name))` as a consistent join key.
 
-**Idempotent loads** — every `load_raw()` call deletes existing rows for `run_date` before inserting. Safe to re-run any step at any time.
+**`generate_schema_name` macro** — dbt's default behaviour prefixes custom schemas with the profile's default schema (producing `staging_marts` instead of `MARTS`). The macro overrides this to use exact schema names.
+
+**Idempotent loads** — every `load_raw()` call deletes rows for `run_date` before inserting. Safe to re-run any step at any time without duplicating data.
+
+**`popularity_normalised`** — Last.fm's popularity is a play count (up to billions), Spotify's is 0–100. A log-scaled normalisation produces a unified 0–100 proxy that works in ORDER BY and visualisations regardless of source.
 
 ---
 
-## Sample Analytics Queries
+## Engineering Decisions & Lessons Learned
 
-Run these in your Snowflake worksheet after the pipeline completes:
-
-```sql
--- Top 10 genres by average energy
-SELECT primary_genre, avg_energy, avg_danceability, track_count
-FROM AUDIO_PIPELINE.MARTS.MART_AUDIO_TRENDS
-WHERE agg_type = 'genre_profile'
-ORDER BY avg_energy DESC
-LIMIT 10;
-
--- How has music's danceability changed across decades?
-SELECT era_bucket, avg_danceability, avg_tempo_bpm, track_count
-FROM AUDIO_PIPELINE.MARTS.MART_AUDIO_TRENDS
-WHERE agg_type = 'era_trends'
-ORDER BY era_bucket;
-
--- Top 20 artists by follower count
-SELECT dimension_value AS artist_name, follower_count, avg_energy
-FROM AUDIO_PIPELINE.MARTS.MART_AUDIO_TRENDS
-WHERE agg_type = 'top_artists'
-ORDER BY follower_count DESC NULLS LAST
-LIMIT 20;
-
--- Most popular tracks (fact table)
-SELECT track_name, artist_name, primary_genre, popularity, mood_score
-FROM AUDIO_PIPELINE.MARTS.FCT_AUDIO_FEATURES
-ORDER BY popularity DESC
-LIMIT 20;
-```
-
----
-
-## Troubleshooting
-
-### Deezer returning 0 records
+**Geo-blocking diagnosis** — Original design used Deezer API. After getting `{"data":[],"total":0}` on both WiFi and mobile hotspot, diagnosed with:
 ```bash
-# Step 1: Run the diagnostic
-make diagnose
-
-# Step 2: Test raw connectivity from terminal
 curl "https://api.deezer.com/chart/0/tracks?limit=5"
-
-# Step 3: Check your network
-# Deezer may be blocked on some corporate/college networks.
-# Try on mobile hotspot. If that works → network firewall issue.
-
-# Step 4: Enable DEBUG logging to see full API responses
-# In deezer_ingest.py, change logging.INFO to logging.DEBUG
+# → {"data":[],"total":0}
 ```
+Deezer geo-blocks Indian IPs. Switched to Last.fm which has no regional restrictions. Lesson: never trust HTTP 200 alone — always validate payload shape.
 
-### Snowflake connection error
-```bash
-# Verify your account identifier format: abc12345.us-east-1
-# Find it: Snowflake UI → bottom-left account menu → Account Identifier
-# Common mistake: using the full URL instead of just the identifier
-```
+**dbt + Python 3.13 incompatibility** — dbt-core 1.10.x crashes on Python 3.13 with an `AttributeError: __class_getitem__` in `mashumaro`. Pinned to `dbt-core==1.8.7` + `dbt-snowflake==1.8.3` which are stable. Documented in `requirements.txt`.
 
-### dbt model errors
-```bash
-cd dbt_project
-dbt debug --profiles-dir .     # verify Snowflake connection
-dbt compile --profiles-dir .   # check SQL compiles without errors
-dbt run --select stg_tracks    # run one model at a time to isolate errors
-```
+**Schema naming** — dbt prefixed schema names with the profile's default schema, creating `staging_staging` and `staging_marts`. Fixed with a `generate_schema_name` macro — standard production pattern for clean schema naming.
 
 ---
 
-## What I Learned Building This
+## What's Next
 
-- **Deezer vs Spotify API** — Spotify's audio analysis endpoint (tempo, energy, danceability) has no equivalent in Deezer's free tier. Designing a schema that gracefully handles NULL features from one source while preserving the same downstream model structure taught me how real pipelines handle multi-source data contracts.
-
-- **SCD-2 implementation in dbt** — The incremental materialisation with surrogate key hashing is the pattern used by most production data warehouses. Understanding *why* you need it (time-travel queries, historical accuracy) makes it stick.
-
-- **Fallback extraction strategy** — Building a cascade (chart → genre → playlist → search) means the pipeline never silently returns 0 records. The `MIN_RECORDS_REQUIRED` guardrail forces loud failure rather than passing empty data downstream.
+- [ ] Add Apache Airflow as alternative orchestrator
+- [ ] Swap local raw storage for S3 (one-line path change in `ingest.py`)
+- [ ] Add Spotify source for audio features (danceability, energy, valence)
+- [ ] Build Streamlit dashboard on top of `mart_audio_trends`
+- [ ] Add dbt snapshots for full historical tracking
 
 ---
 
 ## Author
 
 **Prachita Kotangale** — Data Engineer  
-[LinkedIn](https://linkedin.com/in/prachita-kotangale) · [GitHub](https://github.com/YOUR_USERNAME)
+[LinkedIn](https://linkedin.com/in/prachita-kotangale) · [GitHub](https://github.com/2Prachita)
 
 *Stack: Python · Snowflake · Prefect · dbt · Terraform · Azure DevOps*
