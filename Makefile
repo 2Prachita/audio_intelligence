@@ -9,7 +9,7 @@
 # ── Default ──────────────────────────────────────────────────────────
 help:
 	@echo ""
-	@echo "  🎵 Audio Intelligence Pipeline"
+	@echo "  Audio Intelligence Pipeline"
 	@echo "  ─────────────────────────────────────────────────────"
 	@echo "  make install          Install all Python dependencies"
 	@echo "  make env-check        Verify all env vars are set"
@@ -33,12 +33,12 @@ install:
 
 env-check:
 	@echo "Checking required environment variables..."
-	@test -n "$$SNOWFLAKE_ACCOUNT"   || (echo "❌ SNOWFLAKE_ACCOUNT not set"   && exit 1)
-	@test -n "$$SNOWFLAKE_USER"      || (echo "❌ SNOWFLAKE_USER not set"      && exit 1)
-	@test -n "$$SNOWFLAKE_PASSWORD"  || (echo "❌ SNOWFLAKE_PASSWORD not set"  && exit 1)
-	@test -n "$$SNOWFLAKE_WAREHOUSE" || (echo "❌ SNOWFLAKE_WAREHOUSE not set" && exit 1)
-	@test -n "$$SNOWFLAKE_ROLE"      || (echo "❌ SNOWFLAKE_ROLE not set"      && exit 1)
-	@test -n "$$LASTFM_API_KEY"      || (echo "❌ LASTFM_API_KEY not set"      && exit 1)
+	@test -n "$$SNOWFLAKE_ACCOUNT"   || (echo "SNOWFLAKE_ACCOUNT not set"   && exit 1)
+	@test -n "$$SNOWFLAKE_USER"      || (echo "SNOWFLAKE_USER not set"      && exit 1)
+	@test -n "$$SNOWFLAKE_PASSWORD"  || (echo "SNOWFLAKE_PASSWORD not set"  && exit 1)
+	@test -n "$$SNOWFLAKE_WAREHOUSE" || (echo "SNOWFLAKE_WAREHOUSE not set" && exit 1)
+	@test -n "$$SNOWFLAKE_ROLE"      || (echo "SNOWFLAKE_ROLE not set"      && exit 1)
+	@test -n "$$LASTFM_API_KEY"      || (echo "LASTFM_API_KEY not set"      && exit 1)
 	@echo "All environment variables set"
 
 # ── Diagnose ─────────────────────────────────────────────────────────
@@ -57,7 +57,7 @@ load:
 	python -m ingestion.snowflake_loader
 
 # ── dbt ──────────────────────────────────────────────────────────────
-DBT_FLAGS = --profiles-dir . --project-dir dbt_project
+DBT_FLAGS = --profiles-dir dbt_project --project-dir dbt_project
 
 dbt-deps:
 	dbt deps $(DBT_FLAGS)

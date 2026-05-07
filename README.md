@@ -1,4 +1,4 @@
-# 🎵 Audio Intelligence Pipeline
+# Audio Intelligence Pipeline
 
 > End-to-end data engineering portfolio project — ingests global music chart data from the Last.fm API, orchestrates transformations with Prefect, models with dbt, and lands analytics-ready data in Snowflake. Designed to mirror real production patterns at audio-AI companies like ElevenLabs, Deepgram, and Sarvam AI.
 
@@ -180,25 +180,24 @@ FROM AUDIO_PIPELINE.MARTS.MART_AUDIO_TRENDS
 WHERE agg_type = 'top_artists'
 ORDER BY listener_count DESC NULLS LAST
 LIMIT 20;
+```
+![Query Result](images/img1.png)
 
+```sql
 -- Most played tracks
 SELECT track_name, artist_name, play_count, popularity_normalised
 FROM AUDIO_PIPELINE.MARTS.FCT_AUDIO_FEATURES
 ORDER BY play_count DESC NULLS LAST
 LIMIT 20;
-
--- Genre breakdown
-SELECT dimension_value AS genre, track_count, avg_popularity
-FROM AUDIO_PIPELINE.MARTS.MART_AUDIO_TRENDS
-WHERE agg_type = 'genre_profile'
-ORDER BY track_count DESC;
 ```
+![Query Result](images/img2.png)
 
 ### 7. Generate dbt docs (optional but impressive)
 ```bash
 make dbt-docs
-# Opens at http://localhost:8080 — screenshot the lineage DAG
+Opens at http://localhost:8080
 ```
+![Lineage Graph](images/img3.png)
 
 ---
 
@@ -253,7 +252,6 @@ Deezer geo-blocks Indian IPs. Switched to Last.fm which has no regional restrict
 - [ ] Swap local raw storage for S3 (one-line path change in `ingest.py`)
 - [ ] Add Spotify source for audio features (danceability, energy, valence)
 - [ ] Build Streamlit dashboard on top of `mart_audio_trends`
-- [ ] Add dbt snapshots for full historical tracking
 
 ---
 
